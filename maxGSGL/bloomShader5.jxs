@@ -1,0 +1,138 @@
+<jittershader name="shadeshade">
+	<description> shade shade </description>
+	<param name="position" type="vec3" state="POSITION" />
+	<param name="vertexColor" type="vec4" state="COLOR" />
+	<param name="modeViewProjectionMatrix" type="mat4" state="MODELVIEW_PROJECTION_MATRIX" />
+	<param name="jit_texcoord" type="vec2" state="TEXCOORD" />
+	<param name="time" type="float" default="0" />
+	<param name="resolution" type="vec2" state="TEXDIM0" />
+  <param name="textureMatrix0" type="mat4" state="TEXTURE0_MATRIX" />
+	<param name="point_size" state="POINT_SIZE" />
+  
+	<language name="glsl" version="1.5">
+
+		<bind param="position" program="vp"/>
+		<bind param="vertexColor" program="vp"/>
+		<bind param="modeViewProjectionMatrix" program="vp"/>
+		<bind param="jit_texcoord" program="vp" />
+    <bind param="textureMatrix0" program="vp" />
+		<bind param="point_size" program="vp" />
+
+		<bind param="time" program="fp" />
+		<bind param="resolution" program="fp" />
+		
+		<program name="vp" type="vertex">
+			<![CDATA[
+				// vertex shader
+				#version 330 core
+
+				in vec3 position;
+				in vec4 vertexColor;
+				in vec2 jit_texcoord;
+
+				uniform mat4 modeViewProjectionMatrix;
+        uniform mat4 textureMatrix0;
+				uniform float point_size;
+
+				out vec4 outVertexColor;
+				out jit_PerVertex {
+					vec2 texcoord;
+					vec3 position;
+				} jit_out;
+
+
+				void main(){
+					// moves from object space -> screen space
+					gl_Position = modeViewProjectionMatrix * vec4(position, 1.0);
+					jit_out.texcoord = vec2(textureMatrix0*vec4(jit_texcoord, 0., 1.));
+					outVertexColor = vertexColor;
+					gl_PointSize = (point_size / (gl_Position.w == 0.0 ? 0.00001 : gl_Position.w)) * 5.2;
+					jit_out.position = position;
+				}
+			]]>
+		</program>
+		<program name="fp" type="fragment">
+			<![CDATA[
+				// fragment shader
+				#version 330 core
+
+				in jit_PerVertex {
+					vec2 texcoord;
+					vec3 position;
+				} jit_in;
+
+				in vec4 outVertexColor;
+
+				uniform float time;
+				uniform vec2 resolution;
+
+				out vec4 outColor;
+				out vec4 fragColor;
+
+				// vec2 rotate(vec2 p,float a){
+				// 	float c = cos(a);
+				// 	float s = sin(a);
+				// 	return p*mat2(c,s,-s,c);
+				// }
+
+				// float map(vec3 p){
+				// 	for( int i = 0; i<8; ++i){
+				// 		float t = time*0.2;
+				// 		p.xz =rotate(p.xz,t);
+				// 		p.xy =rotate(p.xy,t*1.89);
+				// 		p.xz = abs(p.xz);
+				// 		p.xz-=.5;
+				// 	}
+				// 	return dot(sign(p),p)/5.;
+				// }
+
+				// vec4 rm (vec3 ro, vec3 rd){
+				// 	float t = 0.;
+				// 	vec3 col = vec3(0.);
+				// 	float d;
+				// 	for(float i =0.; i<64.; i++){
+				// 	vec3 p = ro + rd*t;
+				// 	d = map(p)*.5;
+				// 	if(d<0.02){
+				// 			break;
+				// 	}
+				// 	if(d>100.){
+				// 		break;
+				// 	}
+				// 	col+=vec3(0.6,0.8,0.8)/(400.*(d));
+				// 	// col+=palette(length(p)*.1)/(400.*(d));
+				// 	t+=d;
+				// 	}
+				// 	return vec4(col,1./(d*100.));
+				// }
+
+				void main(){
+					vec2 uv = (gl_PointCoord.st-(resolution.xy/2.))/resolution.x;
+					float dx = gl_PointCoord.s - .5;
+					float dy = gl_PointCoord.t - .5; 
+					float r = sqrt(dx*dx+dy*dy);
+					float dist = r * sin(atan(dy,dx)*(jit_in.position.z*50.)) * .5;
+
+					float cosdx = (cos(time*2.+gl_PointCoord.t)/3.) + gl_PointCoord.x - .5;
+					float sindy = (sin(time+gl_PointCoord.s)/3.)+gl_PointCoord.t - .5; 
+					float orbit = sqrt(cosdx*cosdx + sindy*sindy);
+
+					float sinTime = sin(time)/2. + .5;
+
+					fragColor = mix(vec4(outVertexColor.brg*.6, .9), vec4(outVertexColor.rgb, .0), smoothstep(.0, .16, orbit - .1*jit_in.position.z));
+					fragColor += mix(outVertexColor, vec4(outVertexColor.rgb, .0), smoothstep(0.1, .2, dist + r * .8));
+
+					// fragColor += vec4(gl_FragCoord.y/1000., gl_FragCoord.x/1000., 0., .2);
+
+
+					// if(length(gl_PointCoord-0.5) >= 0.5) discard; // for some reason now correctly renders the point shape? // 
+
+					//mix(outVertexColor, vec4(0., 0., 1., 1.), smoothstep(.25, .45, dist));
+					//vec4(1., .8, .7, .8) ;
+					//outVertexColor;
+					//vec4(dx,dy,dist,dist);
+				}
+			]]>
+		</program>
+	</language>
+</jittershader>
